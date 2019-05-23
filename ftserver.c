@@ -18,15 +18,19 @@
 #include <signal.h>
 #include <arpa/inet.h>
 
-#define MAX 4096
+#include "ft.h"
+
+#define MAX_BUF 512
 #define MAX_CNCT 5
-#define STAT_LEN 3
+#define STAT_LEN 4
+#define CMD_LEN 2
 #define ASCII_CAP_START 65
 #define ASCII_SPACE 32
+#define list "-l"
+#define get "-g"
 
 int charsExpected = -1;
 static int childcnt;
-// const char KEYS[] = {65,66,67,68,69,70,71,72,73,74,75,76,77,78,79,80,81,82,83,84,85,86,87,88,89,90,32};
 
 int recvDataSize(int sockfd);
 int recvData(int sockfd, void**, int);
@@ -48,56 +52,68 @@ grimReaper(int sig) {
 int main(int argc, char *argv[])
 {
 	int sock, newSock, n;
-   char buffer[MAX],
+   char buffer[MAX_BUF],
         dd_addr_buff[20],
         status[STAT_LEN];
 	socklen_t clientLen;
    pid_t childpid;
-	struct sigaction sa;
-   struct sockaddr_in servAddr_cmd, clientAddr_cmd;
+	struct sigaction sigact;
+   struct sockaddr_in ssa_cmd, csa_cmd;
 
-   if (argc < 2) { fprintf(stderr," == USAGE: %s PORT=<port>\n", "make server"); exit(1); } // Check usage & args
+   if (argc < 2) { fprintf(stderr," ***ERROR usage: %s PORT=<port>", "make server"); exit(1); } // Check usage & args
 
-	sigemptyset(&sa.sa_mask);
-	sa.sa_flags = SA_RESTART;
-	sa.sa_handler = grimReaper;
-	if (sigaction(SIGCHLD, &sa, NULL) == -1) {
+	sigemptyset(&sigact.sa_mask);
+	sigact.sa_flags = SA_RESTART;
+	sigact.sa_handler = grimReaper;
+	if (sigaction(SIGCHLD, &sigact, NULL) == -1) {
 		error("SERVER: Error from sigaction()");
 		exit(EXIT_FAILURE);
 	}
 
-
 	// Set up the address struct for the server
-	memset((char *)&servAddr_cmd, '\0', sizeof(servAddr_cmd)); // Clear out the address struct
-	servAddr_cmd.sin_family = AF_INET; // Create a network-capable socket
-	servAddr_cmd.sin_port = htons(atoi(argv[1])); // Store the port number
-	servAddr_cmd.sin_addr.s_addr = INADDR_ANY; // Any address is allowed for connection to this process
+	memset((char *)&ssa_cmd, '\0', sizeof(ssa_cmd)); // Clear out the address struct
+	ssa_cmd.family = AF_INET; // Create a network-capable socket
+	ssa_cmd.port = htons(atoi(argv[1])); // Store the port number
+	ssa_cmd.addr.s_addr = INADDR_ANY; // Any address is allowed for connection to this process
 
 	// Set up a socket
 	sock = socket(AF_INET, SOCK_STREAM, 0); // Create the socket
    if (sock < 0) { error("ERROR opening socket"); }
 
 	// Enable the socket to begin listening
-	if ( bind(sock, (struct sockaddr *)&servAddr_cmd, sizeof(servAddr_cmd)) < 0) // Connect socket to port
+	if ( bind(sock, (SA*)&ssa_cmd, sizeof(ssa_cmd)) < 0) // Connect socket to port
 		error("ERROR on binding server cmd port");
 
    listen(sock, MAX_CNCT); // Flip the socket on - it can now receive up to 5 connections
+   printf("Server listening on localhost at port %s\n", argv[1]);
    childcnt = 0;
 
    // Enter server listening loop
    while(1){
       if(childcnt > MAX_CNCT){ error("Maximum number of conccurent connections reached\n"); break; }
-      clientLen = sizeof(clientAddr_cmd); // Get the size of the address for the client that will connect
+      clientLen = sizeof(csa_cmd); // Get the size of the address for the client that will connect
 
       // Accept a connection, blocking if one is not available until one connects
-      newSock = accept(sock, (struct sockaddr *)&clientAddr_cmd, &clientLen); // Accept
+      newSock = accept(sock, (SA*)&csa_cmd, &clientLen); // Accept
       if (newSock < 0) { error("ERROR on accept"); }
 
-      inet_ntop(AF_INET, &clientAddr_cmd.sin_addr, dd_addr_buff, clientLen);
-      printf("SERVER: accepted connection from %s on %d \n", dd_addr_buff, servAddr_cmd.sin_port);
+      // save client address as string
+      inet_ntop(AF_INET, &csa_cmd.addr, dd_addr_buff, clientLen);
+      // acknowledge the client has connected, print the address and port
+      printf("SERVER: accepted connection from %s on %d \n", dd_addr_buff, ssa_cmd.port);
 
+      // send client success status
       sprintf(status, "220");
       send(newSock, status, strlen(status), 0);
+
+      while(1){
+         memset(buffer, '\0', MAX_BUF);
+         recv(newSock, buffer, CMD_LEN, 0);
+         if(strcmp(buffer, list) == 0 || strcmp(buffer, get) == 0){
+            sprintf(status, "150");
+            send(newSock, status, strlen(status), 0);
+         }
+      }
 
 
    //    childcnt++;

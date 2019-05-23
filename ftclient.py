@@ -1,27 +1,58 @@
-from socket import socket, AF_INET, SOCK_STREAM
-import random
-import string
+import sys
+import statuscodes as code
+from Mysocket import Mysocket
 
 
-def randMessage(length):
-    charArr = []
-    for i in range(length):
-        charArr.append(random.choice(string.ascii_letters))
+def main():
+    if len(sys.argv) != 2:
+        print("*** ERROR usage: make client PORT=<port_num>")
+        return 1
 
-    return ''.join(charArr)
+    sock = Mysocket('localhost', int(sys.argv[1]))
+    sock.init()
+    status = sock.recv(3)
+
+    if status != code.CONNECT:
+        print("CLIENT ERROR: cannot establish control connection with {} port {}\
+        ".format(sock.remoteAddr, sock.remotePort))
+        return -1
+
+    print("ftp> {}\n".format(status))
+
+    while(1):
+        cmd = input("ftp> ")
+        sock.send(cmd)
+        status = sock.recv(3)
+        print("ftp> {}\n".format(status))
+
+# def ctrlConnect(addr, port):
+#     status_len = 3
+#     clientSocket = socket(AF_INET, SOCK_STREAM)
+#     clientSocket.connect((addr, port))
+#     res_raw = clientSocket.recv(status_len)
+#     res_str = res_raw.decode()
+#
+#     if res_str.find(str(code.CONNECT)) == 0:
+#         return code.CONNECT
+#     else:
+#         return -1
 
 
-messageSize = 32
-serverName = 'localhost'
-serverPort = 10021
-clientSocket = socket(AF_INET, SOCK_STREAM)
-clientSocket.connect((serverName, serverPort))
+def prompt():
+    sys.stdout.write("ftp> ")
 
-# message = randMessage(messageSize)
-message = "Hello"
 
-clientSocket.send(message.encode())
-serverResponse = clientSocket.recv(messageSize)
-response = serverResponse.decode()
-print('ftp> ', response)
-clientSocket.close()
+# def dataConnect(addr, port):
+#     status_len = 3
+#     clientSocket = socket(AF_INET, SOCK_STREAM)
+#     clientSocket.connect((addr, port))
+#     res_raw = clientSocket.recv(status_len)
+#     res_str = res_raw.decode()
+#
+#     if res_str.find(str(code.CONNECT)) == 0:
+#         return code.CONNECT
+#     else:
+#         return -1
+
+
+main()
