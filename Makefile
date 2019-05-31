@@ -1,14 +1,16 @@
-CFLAGS= -Wall -lm -coverage -std=c99
+CFLAGS= -Wall -lm -coverage -g -std=c99
 BINARIES=ftserver
+DIR=src/include
 
 
-server: ftserver.c
+server: src/ftserver.c
 	-pkill ftserver
-	gcc -o ftserver ftserver.c $(CFLAGS)
+	gcc -I$(DIR) -o ftserver src/ftserver.c $(CFLAGS)
 	./ftserver $(PORT)
+	mv *.gcno coverage
 
-client: ftclient.py
-	python3 ftclient.py $(PORT)
+client: src/ftclient.py
+	python3 src/ftclient.py $(PORT)
 
 clean:
 	-pkill ftserver
