@@ -82,19 +82,21 @@ int main(int argc, char *argv[])
                recieve(cmdSock, buffer);
                data_connect(&dataSock, atoi(buffer));
 
-               if (strcmp(cmd, "-l") == 0)
-               {
-                  dir_buffer = readDir(".", &dirlen);
-                  sprintf(buffer, "%d", strlen(dir_buffer));
-                  send(cmdSock, buffer, strlen(buffer), 0);
-                  recieve(cmdSock, buffer);
-                  if(strcmp(buffer, "220") == 0)
-                     send(dataSock, dir_buffer, strlen(dir_buffer), 0);
-               }
-               else
-               {
-                  puts("Client wants file transfer");
-               }
+               // handle cmd
+               handle_cmd(&cmd, &buffer, &cmdSock, &dataSock);
+               // if (strcmp(cmd, "-l") == 0)
+               // {
+               //    dir_buffer = readDir(".", &dirlen);
+               //    sprintf(buffer, "%d", strlen(dir_buffer));
+               //    send(cmdSock, buffer, strlen(buffer), 0);
+               //    recieve(cmdSock, buffer);
+               //    if(strcmp(buffer, "220") == 0)
+               //       send(dataSock, dir_buffer, strlen(dir_buffer), 0);
+               // }
+               // else
+               // {
+               //    puts("Client wants file transfer");
+               // }
             }
             else
             {

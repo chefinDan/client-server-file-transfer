@@ -153,7 +153,8 @@ char* readDir(const char* path, int* length)
 		// read contents into buffer
 		for (i = 0, j = 0; (dirInfo = readdir(dirFd)); i = j)
 		{
-			if(stat(dirInfo->d_name, &stat_buf) == -1){
+			if(stat(dirInfo->d_name, &stat_buf) == -1)
+			{
 				error("SERVER: error reading dirInfo");
 			}
 
@@ -164,7 +165,7 @@ char* readDir(const char* path, int* length)
 			if (S_ISDIR(stat_buf.st_mode) && (buf = realloc(buf, (j + 2) * sizeof(char))) == NULL)
 			{
 				closedir(dirFd);
-				fprintf(stderr, "service_readDir(): buffer expansion failed.\n");
+				fprintf(stderr, "readDir(): buffer realloc failed.\n");
 				return 0;
 			}
 
@@ -172,7 +173,7 @@ char* readDir(const char* path, int* length)
 			if(S_ISREG(stat_buf.st_mode) && (buf = realloc(buf, (j + 1) * sizeof(char))) == NULL)
 			{
 				closedir(dirFd);
-				fprintf(stderr, "service_readDir(): buffer expansion failed.\n");
+				fprintf(stderr, "readDir(): buffer realloc failed.\n");
 				return 0;
 			}
 
@@ -183,10 +184,10 @@ char* readDir(const char* path, int* length)
 			}
 			else{
 				strcpy(&buf[i], dirInfo->d_name);
-				buf[j++] = '\n'; // set directory slash identifier
+				buf[j++] = '\n'; // set newline
 			}
 		}
-		
+
 		closedir(dirFd);
 
 		buf[j - 1] = '\0'; // replace last newline with null character
@@ -196,5 +197,32 @@ char* readDir(const char* path, int* length)
 	return buf;
 }
 
+int handle_cmd(char* cmd, char* buf, int* cmdSock, int* dataSock){
+	char* dir_buffer = 0;
+	size_t dirlen;
+	int n;
+
+	if (strcmp(cmd, "-l") == 0)
+	{
+		dir_buffer = readDir(".", &dirlen);
+		sprintf(buf, "%d", strlen(dir_buffer));
+		send(*cmdSock, buf, strlen(buf), 0);
+		recieve(*cmdSock, buf);
+		if (strcmp(buf, "220") == 0){
+			puts("client ready");
+			if((n = send(*dataSock, dir_buffer, strlen(dir_buffer), 0)) == -1){
+				return 0;
+			}
+		}
+		else{
+			return 0;
+		}
+	}
+	else{
+		puts("Client wants file transfer");
+	}
+
+	return 1;
+}
 
 #endif

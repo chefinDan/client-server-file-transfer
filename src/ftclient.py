@@ -73,7 +73,7 @@ def recv_data(cmdSock, port):
     
     cmdSock.send("220\n".encode())
     data = dataSock.recv(dataLen)
-    print(data)
+    print(data.decode())
 
 
 
