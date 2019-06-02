@@ -6,11 +6,11 @@ DIR=src/include
 server: src/ftserver.c
 	-pkill ftserver
 	gcc -I$(DIR) -o ftserver src/ftserver.c $(CFLAGS)
-	# ./ftserver $(PORT)
+	./ftserver $(PORT)
 	# mv *.gcno coverage
 
 client: src/ftclient.py
-	python3 src/ftclient.py $(CPORT) $(DPORT)
+	python3 src/ftclient.py $(HOST) $(CPORT) $(DPORT)
 
 clean:
 	-pkill ftserver

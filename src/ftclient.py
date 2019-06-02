@@ -6,19 +6,22 @@ from socket import socket, AF_INET, SOCK_STREAM, SOL_SOCKET, SO_REUSEADDR
 download_dir = 'downloads'
 
 def main():
-    print(len(sys.argv))
-    if len(sys.argv) != 3:
-        print("*** ERROR usage: make client CPORT=<ctrl_port> DPORT=<data_port>")
+    if len(sys.argv) != 4:
+        print("*** ERROR usage: make client HOST=<host_name> CPORT=<ctrl_port> DPORT=<data_port>")
+        print("*** Host maybe be flip1-4, or localhost")
         return 1
 
-    port = int(sys.argv[1])
-    dataPort = int(sys.argv[2])
-    print(dataPort)
+    host = sys.argv[1]
+    if host == 'flip1' or host == 'flip2' or host == 'flip3' or host == 'flip4':
+        host = host + '.engr.oregonstate.edu'
+    
+    port = int(sys.argv[2])
+    dataPort = int(sys.argv[3])
     sock = socket(AF_INET, SOCK_STREAM)
 
-    if not connect(sock, port):
+    if not connect(sock, host, port):
         return 1
-    
+
     session_loop(sock, port, dataPort)
 
     print("Closing connection")
@@ -37,7 +40,7 @@ def session_loop(sock, port, dataPort):
                 loop = 0
             elif cmdlist[0] == "-g" and len(cmdlist) == 1:
                 print("usage: -g <file_name>")
-            elif cmdlist[0] is "q":
+            elif cmdlist[0] == "-q":
                 loop = 0
             else:
                 print("ftp> {} command not implemented".format(cmd))
@@ -74,7 +77,6 @@ def send_cmd(sock, cmd, port, dataPort):
         return 0
     
     # return success
-    print("here")
     return 1
 
 
@@ -103,6 +105,7 @@ def recv_data(cmdSock, cmd, port):
         cmdSock.send("220\n".encode())
         data = dataSock.recv(dataLen)
         dataSock.close()
+        print("\n")
         print(data.decode())
     else:
         # get res from server for -g cmd
@@ -156,8 +159,8 @@ def recv_data(cmdSock, cmd, port):
 
 
 
-def connect(sock, port):
-    sock.connect(('localhost', port))
+def connect(sock, host, port):
+    sock.connect((host, port))
     res = sock.recv(32).decode()
 
     if res.split()[0] != "220":
@@ -167,7 +170,14 @@ def connect(sock, port):
         sock.close()        
         return 0
     else:
-        print("CLIENT: connected to server on port {}".format(port))
+        print("\n\n==============================================================")
+        print("    Welcome to VS-FTP (Very Simple File Transfer Protocol)    ")
+        print("           Daniel Green, greendan@oregonstate.edu             ")
+        print("==============================================================\n\n")
+        print("        *** Connected to {} on port {} ***              \n".format(host, port))
+        print(" Commands:\n    -g <file_name>    download file if available")
+        print("    -l                list the contents of remote directry")
+        print("    -q                quit the client program\n")
         return 1
 
 
