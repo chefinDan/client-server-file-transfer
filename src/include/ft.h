@@ -285,7 +285,7 @@ int getFile(char** buf, const char *path, size_t *length, char* file_name)
 					}
 
 					//Read file contents into buf
-					fread(*buf, *length, 1, fp);
+					fread(*buf, 1, *length, fp);
 					fclose(fp);
 				}
 			}
@@ -303,6 +303,25 @@ int getFile(char** buf, const char *path, size_t *length, char* file_name)
 	return 0;
 
 }
+
+// void readData(FILE* fp, char* dest, int len)
+// {
+// 	size_t n = 100;
+
+// 	if (fp)
+// 	{
+// 		while (n)
+// 		{
+// 			size_t n_read = fread(head, sizeof(double), n, file);
+// 			head += n_read;
+// 			n -= n_read;
+// 			if (feof(file) || ferror(file))
+// 				break;
+// 		}
+// 		processData(array, head - array);
+// 		fclose(file);
+// 	}
+// }
 
 int handle_cmd(char* cmd, int* cmdSock, int* dataSock){
 	char* file_buffer = 0;
