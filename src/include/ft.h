@@ -1,3 +1,7 @@
+// Author: Daniel Green, greendan@oregonstate.edu
+// Date: 2 June 2019
+// Description: definitions of functions used by ftserver.c
+
 #ifndef _FT_H
 #define _FT_H
 

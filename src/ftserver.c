@@ -1,11 +1,14 @@
 /******************************************************************************
 ** Author: Daniel Green, greendan@oregonstate.edu
+** Date: 2 June 2019
 ** Description: starts a ftp server that accepts list and get commands.
 ******************************************************************************/
 /*
 sources: https://linux.die.net/man/,
          https://docs.python.org/3.7/library/socket.html
+         https://beej.us/guide/bgnet/
 */
+
 #include "ft.h"
 
 int main(int argc, char *argv[])
