@@ -111,8 +111,8 @@ ctrl_recieve(int socket, char* buffer){
 	}
 }
 
-
-int data_connect(int* sock, int port){
+int data_connect(int *sock, struct sockaddr_in* csa_cmd, int port)
+{
 	struct sockaddr_in csa;
 
 	*sock = socket(AF_INET, SOCK_STREAM, 0);
@@ -120,7 +120,7 @@ int data_connect(int* sock, int port){
 	memset((char *)&csa, '\0', sizeof(csa)); // initialize address struct
 	csa.sin_family = AF_INET;						   // Create a network-capable socket
 	csa.sin_port = htons(port);			   // Store the port number
-	csa.sin_addr.s_addr = INADDR_ANY;				   // Any address is allowed for connection to this process
+	csa.sin_addr.s_addr = csa_cmd->sin_addr.s_addr;				   // Any address is allowed for connection to this process
 
 	if (connect(*sock, (SA *)&csa, sizeof(csa)) < 0)
 	{

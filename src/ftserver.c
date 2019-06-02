@@ -69,7 +69,7 @@ int main(int argc, char *argv[])
                ctrl_recieve(cmdSock, buffer);
                
                // data_connect: establishes data connection on dataPort
-               data_connect(&dataSock, dataPort);
+               data_connect(&dataSock, &csa_cmd, dataPort);
 
                // handle_cmd: execs command, sends data, and closes dataSocket
                handle_cmd(cmd, &cmdSock, &dataSock);
