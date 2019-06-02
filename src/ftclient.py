@@ -4,6 +4,7 @@ from socket import socket, AF_INET, SOCK_STREAM, SOL_SOCKET, SO_REUSEADDR
 
 # default location for downloaded files
 download_dir = 'downloads'
+BUFF_SIZE = 4096 # 4 KiB
 
 def main():
     if len(sys.argv) != 4:
@@ -142,9 +143,16 @@ def recv_data(cmdSock, cmd, port):
             cmdSock.send("220\n".encode())
 
             # proceed with recieving data from server
-            data = dataSock.recv(dataLen)
+            data = b''
+            while True:
+                part = dataSock.recv(BUFF_SIZE)
+                data += part
+                if len(part) < BUFF_SIZE or data == dataLen:
+                    # either 0 or end of data
+                    break
+
+            print("{} transfer complete".format(reqfile))
             dataSock.close()
-            print("transfer complete")
 
             if not os.path.exists(download_dir):
                 os.mkdir(download_dir)

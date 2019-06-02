@@ -99,7 +99,7 @@ ctrl_recieve(int socket, char* buffer){
 	{
 		n = recv(socket, &buffer[i], 1, 0);
 		if (n <= 0){
-			puts("bad recv");
+			// puts("bad recv");
 			return;
 		}
 
@@ -327,7 +327,7 @@ int handle_cmd(char* cmd, int* cmdSock, int* dataSock){
 	char* file_buffer = 0;
 	char buffer[MAX_BUF]; 
 	size_t dirlen;
-	int n, result;
+	int n, result, bytesleft, total;
 
 	if (strcmp(cmd, "-l") == 0)
 	{
@@ -394,21 +394,26 @@ int handle_cmd(char* cmd, int* cmdSock, int* dataSock){
 			// If the client recived the expected data size and responded 220
 			if (strcmp(buffer, "220") == 0)
 			{
-				puts("client ready");
-				if ((n = send(*dataSock, file_buffer, dirlen, 0)) == -1)
+				bytesleft = dirlen;
+				total = 0;
+				while (total < dirlen)
 				{
-					// free(*buf);
-					free(file_buffer);
-					close(*dataSock);
-					return 0;
+					n = send(*dataSock, file_buffer + total, dirlen, 0);
+					if (n == -1)
+					{
+						puts("server send error");
+						free(file_buffer);
+						close(*dataSock);
+						return 0;
+					}
+					total += n;
+					bytesleft -= n;
 				}
-				else
-				{
-					// free(*buf);
-					free(file_buffer);
-					close(*dataSock);
-					return 1;
-				}
+
+				puts("file sent");
+				free(file_buffer);
+				close(*dataSock);
+				return 1;
 			}
 		}
 	}
