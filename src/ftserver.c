@@ -1,13 +1,28 @@
 /******************************************************************************
+**                 VS-FTP (Very Simple File Transfer Protocol) 
 ** Author: Daniel Green, greendan@oregonstate.edu
-** Date: 2 June 2019
+** Last Modified: 2 June 2019
 ** Description: starts a ftp server that accepts list and get commands.
+*** Usage requires the ftclient program to be running on either localhost
+*** or remote location. The server program will transfer to client any file
+*** type, including binary, of any size. 
+*** The server will remain listening for connections until SIGINT is recieved.
+*** 
+
+
+** DEMO: To demonstrate the program, first start ftserver, then start ftclient.
+** Transfer big.txt, a 6.2 MB file, and compare downloaded byte size to client
+** reported byte count. Then transfer cvector, a binary file, give it execute
+** permissions and execute. It is simple program that allocates a large array
+** on the heap and displays the size of the array. 
 ******************************************************************************/
+
 /*
 sources: https://linux.die.net/man/,
          https://docs.python.org/3.7/library/socket.html
          https://beej.us/guide/bgnet/
 */
+
 
 #include "ft.h"
 
