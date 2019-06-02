@@ -4,7 +4,7 @@ DIR=src/include
 
 
 server: src/ftserver.c
-	-pkill ftserver
+	# -pkill ftserver
 	gcc -I$(DIR) -o ftserver src/ftserver.c $(CFLAGS)
 	./ftserver $(PORT)
 	# mv *.gcno coverage
