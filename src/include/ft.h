@@ -398,6 +398,8 @@ int handle_cmd(char* cmd, int* cmdSock, int* dataSock){
 				total = 0;
 				while (total < dirlen)
 				{
+					fflush(stdout);
+					printf("%d\n", total);
 					n = send(*dataSock, file_buffer + total, dirlen, 0);
 					if (n == -1)
 					{
