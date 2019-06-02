@@ -147,8 +147,9 @@ def recv_data(cmdSock, cmd, port):
             while True:
                 part = dataSock.recv(BUFF_SIZE)
                 data += part
-                if len(part) < BUFF_SIZE or data == dataLen:
-                    # either 0 or end of data
+                if len(data) == dataLen:
+                    #print(data)
+					# eitiher 0 or end of data
                     break
 
             print("{} transfer complete".format(reqfile))
