@@ -1,4 +1,4 @@
-CFLAGS= -Wall -lm -coverage -g -std=c99
+CFLAGS= -Wall -lm -g -std=c99
 BINARIES=ftserver
 DIR=src/include
 
