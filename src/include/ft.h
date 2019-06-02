@@ -49,18 +49,29 @@ grimReaper(int sig) {
 	// errno = savedErrno;
 }
 
-void printlnStr(char* str, char* data){
-	char* msg = malloc((strlen(str)*sizeof(char)) + (strlen(data)*sizeof(char)));
-	memset(msg, '\0', strlen(msg));
+void 
+printlnStr(char* str, char* data){
+	size_t str_len, data_len;
+	char *msg;
+
+	for (str_len = 0; str[str_len] != '\0'; ++str_len){}
+	for (data_len = 0; data[data_len] != '\0'; ++data_len){}
+	msg = malloc( (str_len + data_len) * sizeof(char));
+	memset(msg, '\0', str_len + data_len);
 	sprintf(msg, str, data);
 	puts(msg);
 	fflush(stdout);
 	free(msg);
 }
 
-void printlnInt(char *str, int data){
-	char *msg = malloc((strlen(str) * sizeof(char))+8);
-	memset(msg, '\0', strlen(msg));
+void 
+printlnInt(char *str, int data){
+	size_t len;
+	char* msg;
+
+	for(len = 0; str[len] != '\0'; ++len){}
+	msg = malloc((len * sizeof(char))+8);
+	memset(msg, '\0', len);
 	sprintf(msg, str, data);
 	puts(msg);
 	fflush(stdout);
@@ -68,16 +79,37 @@ void printlnInt(char *str, int data){
 }
 
 
-void recieve(int socket, char* buffer){
+void 
+recieve(int socket, char** buffer){
+	
+	// for (i = 0, j = 0; (dirInfo = readdir(dirFd)); i = j)
+	// buf = realloc(buf, (j + 2) * sizeof(char)) 
 	int i, n;
+	size_t size = 8;
+	*buffer = (char*)malloc(size * sizeof(char));
+	memset(*buffer, '\0', size);
+	// memset(buffer, '\0', 2);
+
 	for (i = 0;; ++i)
 	{
-		n = recv(socket, &buffer[i], 1, 0);
-		if (n <= 0)
+		n = recv(socket, &(*buffer)[i], 1, 0);
+		// puts(*buffer);
+		if (n <= 0){
+			// puts("bad recv");
 			return;
-		if (buffer[i] == '\n'){
-			buffer[i] = '\0';
+		}
+
+		if ((*buffer)[i] == '\n')
+		{
+			(*buffer)[i] = '\0';
+			// puts(*buffer);
 			return;
+		}
+
+		if(i == size-1){
+			puts("realloc");
+			size *= 2;
+			*buffer = realloc(*buffer, size);
 		}
 	}
 }
@@ -93,13 +125,17 @@ int data_connect(int* sock, int port){
 	csa.sin_port = htons(port);			   // Store the port number
 	csa.sin_addr.s_addr = INADDR_ANY;				   // Any address is allowed for connection to this process
 
-	if(connect(*sock, (SA *)&csa, sizeof(csa)) < 0)
+	if (connect(*sock, (SA *)&csa, sizeof(csa)) < 0)
 	{
-		puts("SERVER: attempting to connect to client for data connection");
+		puts("SERVER: cannot connect to client for data connection");
+		return 0;
+	}
+	else
+	{
+		puts("Connected to client for data transfer");
+		return 1;
 	}
 
-	puts("Connected to client for data transfer");
-	return 1;
 }
 
 
@@ -124,7 +160,8 @@ int start_server(int* sock, int port){
 		error("ERROR on binding server socket");
 	}
 
-	if (listen(*sock, MAX_CNCT) < 0){ // Flip the socket on - it can now receive up to 5 connections
+	// Flip the socket on - it can now receive up to MAX_CNCT connections
+	if (listen(*sock, MAX_CNCT) < 0){ 
 		close(*sock);
 		error("ERROR on listen server socket");
 	}
@@ -197,32 +234,145 @@ char* readDir(const char* path, int* length)
 	return buf;
 }
 
-int handle_cmd(char* cmd, char* buf, int* cmdSock, int* dataSock){
+// returns: 1 if found, O if not found, -1 if file error, -2 if file is directory
+int getFile(unsigned char* buf, const char *path, int *length, char* file_name)
+{
+	// int stat(const char *path, struct stat *buf);
+	// unsigned char* buf = 0;
+	struct stat stat_buf;
+	int i, j, found;
+	FILE *fp;
+	DIR *dirFd;
+	struct dirent *dirInfo;
+
+	if ((dirFd = opendir(path)) == NULL)
+	{
+		error("SERVER: error readDir()");
+	}
+	else
+	{
+		found = 0;
+		// read contents into buffer
+		while (dirInfo = readdir(dirFd))
+		{
+			// get file stats, if cannot stat file return -1
+			if (stat(dirInfo->d_name, &stat_buf) == -1)
+			{
+				return -1;
+			}
+
+			// check if current direntry name matches user requested file_name 
+			if(strcmp(stat(dirInfo->d_name, &stat_buf), file_name) == 0)
+			{
+				// if match is found and it's a directory, return -2
+				if (S_ISDIR(stat_buf.st_mode))
+				{	
+					return -2;
+				}
+				else
+				{
+					found = 1;
+					fp = fopen(file_name, "rb");
+
+					//Get file length
+					fseek(fp, 0, SEEK_END);
+					*length = ftell(fp);
+					fseek(fp, 0, SEEK_SET);
+
+					//Allocate memory
+					if (!(buf = (char *)malloc(*length + 1)))
+					{
+						return -1;
+					}
+
+					//Read file contents into buf
+					fread(buf, *length, 1, fp);
+					fclose(fp);
+				}
+			}
+		}
+	}
+
+	// if file was found and read, return 1
+	closedir(dirFd);
+	if(found)
+	{
+		return 1;
+	}
+	
+	// else return 0 inidicating file was not found
+	return 0;
+
+}
+
+int handle_cmd(char* cmd, char** buf, int* cmdSock, int* dataSock){
 	char* dir_buffer = 0;
+	unsigned char* file_buffer = 0; 
 	size_t dirlen;
-	int n;
+	int n, result;
 
 	if (strcmp(cmd, "-l") == 0)
 	{
 		dir_buffer = readDir(".", &dirlen);
-		sprintf(buf, "%d", strlen(dir_buffer));
-		send(*cmdSock, buf, strlen(buf), 0);
+		sprintf(*buf, "%d", strlen(dir_buffer));
+		send(*cmdSock, *buf, strlen(*buf), 0);
 		recieve(*cmdSock, buf);
-		if (strcmp(buf, "220") == 0){
+		if (strcmp(*buf, "220") == 0){
 			puts("client ready");
 			if((n = send(*dataSock, dir_buffer, strlen(dir_buffer), 0)) == -1){
+				free(*buf);
+				free(dir_buffer);
 				return 0;
+			}
+			else{
+				free(*buf);
+				free(dir_buffer);
+				close(*dataSock);
+				return 1;
 			}
 		}
 		else{
 			return 0;
 		}
 	}
-	else{
+	else if(strcmp(cmd, "-g") == 0)
+	{
 		puts("Client wants file transfer");
+		// send client OK code
+		sprintf(buf, "%d", 220);
+		send(*cmdSock, buf, strlen(buf), 0);
+		
+		// recieve the requested filename from client
+		recieve(*cmdSock, buf);
+		puts(buf);
+
+		// read directory and look for file, writing it's data to file_buffer
+		result = getFile(file_buffer, ".", &dirlen, buf);
+		if(result == 0){
+			sprintf(buf, "%d", 550);
+			send(*cmdSock, buf, strlen(buf), 0);
+		}
+		else if(result == -1){
+			sprintf(buf, "%d", 451);
+			send(*cmdSock, buf, strlen(buf), 0);
+		}
+		else if(result == -2){
+			sprintf(buf, "%d", 450);
+			send(*cmdSock, buf, strlen(buf), 0);
+		}
+		else{
+			sprintf(buf, "%d", 250);
+			send(*cmdSock, buf, strlen(buf), 0);
+		}
+	}
+	else
+	{
+		error("SERVER: error, cmd not found");
 	}
 
 	return 1;
 }
+
+
 
 #endif

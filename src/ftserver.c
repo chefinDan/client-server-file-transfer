@@ -10,7 +10,7 @@ sources: https://linux.die.net/man/,
 
 int main(int argc, char *argv[])
 {
-	int sock, cmdSock, dataSock, n;
+	int sock, cmdSock, dataSock, dataPort, n;
    size_t dirlen;
    char buffer[MAX_BUF],
         msg[MAX_BUF],
@@ -18,7 +18,8 @@ int main(int argc, char *argv[])
         status[MAX_BUF],
         cmd[CMD_LEN];
    char* dir_buffer = 0;
-	socklen_t clientLen;
+   const char *buf = 0;
+   socklen_t clientLen;
    pid_t childpid;
 	// struct sigaction sigact;
    struct sockaddr_in csa_cmd;
@@ -62,45 +63,40 @@ int main(int argc, char *argv[])
 
          while (1)
          {
-            memset(buffer, '\0', MAX_BUF);
+            // memset(buffer, '\0', MAX_BUF);
             memset(status, '\0', MAX_BUF);
 
             // recv command from client on cmd port
-            recieve(cmdSock, buffer);
+            // recieve(cmdSock, buffer);
+            recieve(cmdSock, &buf);
+            printlnStr("Recieved from client: %s", buf);
 
+            // printf("%s", buf);
             // Only accept legal commands
-            if (strcmp(buffer, "-l") == 0 || strcmp(buffer, "-g") == 0)
+            if (strcmp(buf, "-l") == 0 || strcmp(buf, "-g") == 0)
             {
                // save command
-               strcpy(cmd, buffer);
+               strcpy(cmd, buf);
 
-               // send client the connect status
-               sprintf(status, "150");
+               // send client the "pending further information" status
+               sprintf(status, "350");
                send(cmdSock, status, strlen(status), 0);
 
                // recieve data port from client   
-               recieve(cmdSock, buffer);
-               data_connect(&dataSock, atoi(buffer));
+               recieve(cmdSock, &buf);
+               dataPort = atoi(buf);
+               send(cmdSock, status, strlen(status), 0);
+
+               //recieve OK ready for connection status from client
+               recieve(cmdSock, &buf);
+               data_connect(&dataSock, dataPort);
 
                // handle cmd
-               handle_cmd(&cmd, &buffer, &cmdSock, &dataSock);
-               // if (strcmp(cmd, "-l") == 0)
-               // {
-               //    dir_buffer = readDir(".", &dirlen);
-               //    sprintf(buffer, "%d", strlen(dir_buffer));
-               //    send(cmdSock, buffer, strlen(buffer), 0);
-               //    recieve(cmdSock, buffer);
-               //    if(strcmp(buffer, "220") == 0)
-               //       send(dataSock, dir_buffer, strlen(dir_buffer), 0);
-               // }
-               // else
-               // {
-               //    puts("Client wants file transfer");
-               // }
+               handle_cmd(&cmd, &buf, &cmdSock, &dataSock);
             }
             else
             {
-               printlnStr("Recieved from client: %s", buffer);
+               printlnStr("Recieved from client: %s", buf);
                // send client error status
                sprintf(status, "502");
                send(cmdSock, status, strlen(status), 0);
@@ -117,119 +113,5 @@ int main(int argc, char *argv[])
    close(sock); // Close the listening socket
    return 0;
 }
-
-
-   //    childcnt++;
-   //    childpid = fork();
-   //
-   //    switch(childpid){
-   //       case -1:
-   //          fflush(stdout);
-   //          printf("fork error\n");
-   //          fflush(stdout);
-   //          close(cmdSock);
-   //          close(sock);
-   //          exit(1);
-   //
-   //       case 0:
-   //       {
-   //          void* buffer;
-   //          int dataLength = 32;
-   //          // encoded = cypher = decoded = NULL;
-   //          close(sock); // close the child's copy of the listening socket;
-   //          // begin communicating with client over establishedConnectionFD,
-   //          recvData(cmdSock, &buffer, dataLength);
-   //          // recvData(establishedConnectionFD, &cypher);
-   //          // decode(encoded, cypher, &decoded);
-   //          // sendDecoded(establishedConnectionFD, &decoded);
-   //          exit(EXIT_SUCCESS);
-   //          break;
-   //       }
-   //       default:
-   //          close(establishedConnectionFD); // Close the parents copy of the connected socket
-   //          break; // begin listening again for new connections
-   //    }
-
-
-// int recvData(int sockfd, void** buffer, int dataLength){
-// 	int charsRead, charsSent, charsRemain, n;
-
-// 	charsRead = 0;
-// 	charsRemain = dataLength;
-
-//    *buffer = malloc(dataLength);
-//    memset(*buffer, '\0', dataLength);
-
-//    while(charsRead < dataLength){
-//       n = recv(sockfd, buffer + dataLength, charsRemain, 0);
-//       if (charsRead < 0) { error("ERROR reading from socket"); }
-//       charsRead+=n;
-//       charsRemain-=n;
-//    }
-
-// 	// Send a Success message back to the client
-// 	charsSent = send(sockfd, buffer, dataLength, 0); // Send message back
-// 	if (charsSent < 0) { error("ERROR writing to socket"); }
-
-// 	return 1;
-// }
-
-
-// int sendDecoded(int sockfd, char** buffer){
-//    int charsWritten, charsSent, charsRemain, len, n;
-//    char status[MAX_STATUS];
-//
-//   len = strlen(*buffer);
-//   charsRemain = len;
-// 	charsWritten = 0;
-//
-// 	while(charsWritten < len){
-// 		n = send(sockfd, *buffer + charsWritten, charsRemain, 0); // Write to the server
-// 		if (n < 0) { error("SERVER: ERROR writing to socket"); return 1; }
-// 		charsWritten+=n;
-// 		charsRemain-=n;
-// 	}
-//
-//   // recv client status
-// 	n = recv(sockfd, status, MAX_STATUS, 0);
-//   if (n < 0) { error("SERVER: ERROR recieving from socket"); return 1; }
-//
-// 	return 1;
-// }
-//
-//
-//
-// int recvDataSize(int sockfd){
-// 	char buffer[MAX_STATUS];
-// 	int charsRead, charsSent, n;
-// 	memset(buffer, '\0', MAX_STATUS);
-//
-// 	n = recv(sockfd, buffer, MAX_STATUS, 0);
-// 	if(n < 0){ error("SERVER: cannot recieve data size"); exit(1); }
-// 	send(sockfd, "200", MAX_STATUS, 0);
-// 	return (int)strtol(buffer, NULL, 10);
-// }
-//
-// int decode(char* encoded, char *cypher, char **decoded){
-//   int i, enc, cyp, dec;
-//
-//   *decoded = (char*)malloc(strlen(encoded)+1);
-//   memset(*decoded, '\0', strlen(encoded)+1);
-//
-//   for(i = 0; *(encoded+i); i++){
-//     if(*(encoded+i) == ASCII_SPACE) { enc = 26; }
-//     else{ enc = *(encoded+i) - ASCII_CAP_START; }
-//     // printf("decode: enc: %d\n", enc);
-//
-//     if(*(cypher+i) == ASCII_SPACE){ cyp = 26; }
-//     else{ cyp = *(cypher+i) - ASCII_CAP_START; }
-//
-//     dec = enc-cyp;
-//     if(dec < 0){ dec+=27; }
-//     dec=dec%27;
-//
-//     *(*decoded+i) = KEYS[dec];
-//   }
-// }
 
 void error(const char *msg) { perror(msg); exit(1); } // Error function used for reporting issues
