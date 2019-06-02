@@ -17,17 +17,16 @@
 #include <signal.h>
 #include <arpa/inet.h>
 #include <dirent.h>
+#include "cvector.h"
 
 #define MAX_BUF 512
 #define MAX_CNCT 5
+#define ADDR_LEN 20
 #define STAT_LEN 4
 #define CMD_LEN 2
 #define ASCII_CAP_START 65
 #define ASCII_SPACE 32
 #define SA struct sockaddr
-// #define family sin_family
-// #define port sin_port
-// #define addr sin_addr
 
 int charsExpected = -1;
 static int childcnt;
@@ -78,38 +77,32 @@ printlnInt(char *str, int data){
 	free(msg);
 }
 
+void 
+ctrl_send(const char* status, int sock){
+	char buf[16];
+	memset(buf, '\0', 16);
+
+	// sprintf(buf, status);
+	send(sock, status, strlen(status), 0);
+}
+
 
 void 
-recieve(int socket, char** buffer){
-	
-	// for (i = 0, j = 0; (dirInfo = readdir(dirFd)); i = j)
-	// buf = realloc(buf, (j + 2) * sizeof(char)) 
+ctrl_recieve(int socket, char* buffer){	
 	int i, n;
-	size_t size = 8;
-	*buffer = (char*)malloc(size * sizeof(char));
-	memset(*buffer, '\0', size);
-	// memset(buffer, '\0', 2);
 
 	for (i = 0;; ++i)
 	{
-		n = recv(socket, &(*buffer)[i], 1, 0);
-		// puts(*buffer);
+		n = recv(socket, &buffer[i], 1, 0);
 		if (n <= 0){
-			// puts("bad recv");
+			puts("bad recv");
 			return;
 		}
 
-		if ((*buffer)[i] == '\n')
+		if (buffer[i] == '\n')
 		{
-			(*buffer)[i] = '\0';
-			// puts(*buffer);
+			buffer[i] = '\0';
 			return;
-		}
-
-		if(i == size-1){
-			puts("realloc");
-			size *= 2;
-			*buffer = realloc(*buffer, size);
 		}
 	}
 }
@@ -171,7 +164,8 @@ int start_server(int* sock, int port){
 	return 1;
 }
 
-char* readDir(const char* path, int* length)
+
+char* readDirectory(const char* path, size_t* length)
 {
 	// int stat(const char *path, struct stat *buf);
 	char* buf = 0;
@@ -183,7 +177,7 @@ char* readDir(const char* path, int* length)
 
 	if ((dirFd = opendir(path)) == NULL)
 	{
-		error("SERVER: error readDir()");
+		error("SERVER: error readDirectory()");
 	}
 	else
 	{
@@ -234,13 +228,14 @@ char* readDir(const char* path, int* length)
 	return buf;
 }
 
+
 // returns: 1 if found, O if not found, -1 if file error, -2 if file is directory
-int getFile(unsigned char* buf, const char *path, int *length, char* file_name)
+int getFile(char** buf, const char *path, size_t *length, char* file_name)
 {
 	// int stat(const char *path, struct stat *buf);
 	// unsigned char* buf = 0;
 	struct stat stat_buf;
-	int i, j, found;
+	int found;
 	FILE *fp;
 	DIR *dirFd;
 	struct dirent *dirInfo;
@@ -253,7 +248,7 @@ int getFile(unsigned char* buf, const char *path, int *length, char* file_name)
 	{
 		found = 0;
 		// read contents into buffer
-		while (dirInfo = readdir(dirFd))
+		while ((dirInfo = readdir(dirFd)))
 		{
 			// get file stats, if cannot stat file return -1
 			if (stat(dirInfo->d_name, &stat_buf) == -1)
@@ -262,7 +257,7 @@ int getFile(unsigned char* buf, const char *path, int *length, char* file_name)
 			}
 
 			// check if current direntry name matches user requested file_name 
-			if(strcmp(stat(dirInfo->d_name, &stat_buf), file_name) == 0)
+			if(strcmp(dirInfo->d_name, file_name) == 0)
 			{
 				// if match is found and it's a directory, return -2
 				if (S_ISDIR(stat_buf.st_mode))
@@ -280,13 +275,13 @@ int getFile(unsigned char* buf, const char *path, int *length, char* file_name)
 					fseek(fp, 0, SEEK_SET);
 
 					//Allocate memory
-					if (!(buf = (char *)malloc(*length + 1)))
+					if (!(*buf = (char *)malloc(*length + 1)))
 					{
 						return -1;
 					}
 
 					//Read file contents into buf
-					fread(buf, *length, 1, fp);
+					fread(*buf, *length, 1, fp);
 					fclose(fp);
 				}
 			}
@@ -305,28 +300,33 @@ int getFile(unsigned char* buf, const char *path, int *length, char* file_name)
 
 }
 
-int handle_cmd(char* cmd, char** buf, int* cmdSock, int* dataSock){
-	char* dir_buffer = 0;
-	unsigned char* file_buffer = 0; 
+int handle_cmd(char* cmd, int* cmdSock, int* dataSock){
+	char* file_buffer = 0;
+	char buffer[MAX_BUF]; 
 	size_t dirlen;
 	int n, result;
 
 	if (strcmp(cmd, "-l") == 0)
 	{
-		dir_buffer = readDir(".", &dirlen);
-		sprintf(*buf, "%d", strlen(dir_buffer));
-		send(*cmdSock, *buf, strlen(*buf), 0);
-		recieve(*cmdSock, buf);
-		if (strcmp(*buf, "220") == 0){
+		// read local directory into buffer
+		file_buffer = readDirectory(".", &dirlen);
+		// read length of buffer and send to client
+		sprintf(buffer, "%ld", strlen(file_buffer));
+		ctrl_send(buffer, *cmdSock);
+		// send(*cmdSock, *buf, strlen(*buf), 0);
+		ctrl_recieve(*cmdSock, buffer);
+
+		// If the client recived the expected data size and responded 220
+		if (strcmp(buffer, "220") == 0){
 			puts("client ready");
-			if((n = send(*dataSock, dir_buffer, strlen(dir_buffer), 0)) == -1){
-				free(*buf);
-				free(dir_buffer);
+			if((n = send(*dataSock, file_buffer, strlen(file_buffer), 0)) == -1){
+				// free(*buf);
+				free(file_buffer);
 				return 0;
 			}
 			else{
-				free(*buf);
-				free(dir_buffer);
+				// free(*buf);
+				free(file_buffer);
 				close(*dataSock);
 				return 1;
 			}
@@ -338,31 +338,55 @@ int handle_cmd(char* cmd, char** buf, int* cmdSock, int* dataSock){
 	else if(strcmp(cmd, "-g") == 0)
 	{
 		puts("Client wants file transfer");
-		// send client OK code
-		sprintf(buf, "%d", 220);
-		send(*cmdSock, buf, strlen(buf), 0);
+		// send client "pending further action" code
+		ctrl_send("350", *cmdSock);
+
 		
 		// recieve the requested filename from client
-		recieve(*cmdSock, buf);
-		puts(buf);
+		ctrl_recieve(*cmdSock, buffer);
+		// puts("Client wants: ");
+		// puts(buffer);
 
 		// read directory and look for file, writing it's data to file_buffer
-		result = getFile(file_buffer, ".", &dirlen, buf);
+		result = getFile(&file_buffer, ".", &dirlen, buffer);
 		if(result == 0){
-			sprintf(buf, "%d", 550);
-			send(*cmdSock, buf, strlen(buf), 0);
+			ctrl_send("550", *cmdSock);
 		}
 		else if(result == -1){
-			sprintf(buf, "%d", 451);
-			send(*cmdSock, buf, strlen(buf), 0);
+			ctrl_send("451", *cmdSock);
 		}
 		else if(result == -2){
-			sprintf(buf, "%d", 450);
-			send(*cmdSock, buf, strlen(buf), 0);
+			ctrl_send("550", *cmdSock);
 		}
 		else{
-			sprintf(buf, "%d", 250);
-			send(*cmdSock, buf, strlen(buf), 0);
+			// inform client that file was found
+			ctrl_send("250", *cmdSock);
+			ctrl_recieve(*cmdSock, buffer);
+
+			// inform client of datasize
+			sprintf(buffer, "%ld", dirlen);
+			ctrl_send(buffer, *cmdSock);
+			ctrl_recieve(*cmdSock, buffer);
+			
+			// If the client recived the expected data size and responded 220
+			if (strcmp(buffer, "220") == 0)
+			{
+				puts("client ready");
+				if ((n = send(*dataSock, file_buffer, dirlen, 0)) == -1)
+				{
+					// free(*buf);
+					free(file_buffer);
+					close(*dataSock);
+					return 0;
+				}
+				else
+				{
+					// free(*buf);
+					free(file_buffer);
+					close(*dataSock);
+					return 1;
+				}
+			}
 		}
 	}
 	else

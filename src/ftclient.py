@@ -1,34 +1,40 @@
 import sys
+import os
 from socket import socket, AF_INET, SOCK_STREAM, SOL_SOCKET, SO_REUSEADDR
 
+# default location for downloaded files
+download_dir = 'downloads'
 
 def main():
-    if len(sys.argv) != 2:
-        print("*** ERROR usage: make client PORT=<port_num>")
+    print(len(sys.argv))
+    if len(sys.argv) != 3:
+        print("*** ERROR usage: make client CPORT=<ctrl_port> DPORT=<data_port>")
         return 1
 
     port = int(sys.argv[1])
+    dataPort = int(sys.argv[2])
+    print(dataPort)
     sock = socket(AF_INET, SOCK_STREAM)
 
     if not connect(sock, port):
         return 1
     
-    session_loop(sock, port)
+    session_loop(sock, port, dataPort)
 
     print("Closing connection")
     sock.close()
 
     
-
-def session_loop(sock, port):
+def session_loop(sock, port, dataPort):
     loop = 1
 
     while(loop):
             cmd = input("ftp> ")
             cmdlist = cmd.split()
             if cmdlist[0] == "-l" or (cmdlist[0] == "-g" and len(cmdlist) == 2):
-                print("cmd: {}".format(cmdlist))
-                handle_cmd(sock, cmdlist, port)
+                # print("cmd: {}".format(cmdlist))
+                handle_cmd(sock, cmdlist, port, dataPort)
+                loop = 0
             elif cmdlist[0] == "-g" and len(cmdlist) == 1:
                 print("usage: -g <file_name>")
             elif cmdlist[0] is "q":
@@ -38,39 +44,38 @@ def session_loop(sock, port):
 
 
 
-def handle_cmd(sock, cmd, port):
-    dataPort = send_cmd(sock, cmd, port)
-    
-    if dataPort:
+def handle_cmd(sock, cmd, port, dataPort):
+    if send_cmd(sock, cmd, port, dataPort):
         recv_data(sock, cmd, dataPort)
         
         
 
 
-def send_cmd(sock, cmd, port):
+def send_cmd(sock, cmd, port, dataPort):
     
     # send cmd to server
     sock.send((cmd[0] + '\n').encode())    
     res = sock.recv(3).decode()
+
     
     # check for "pending further information" response  
-    print("CLIENT: server status: {}".format(res))
+    # print("CLIENT: server status: {}".format(res))
     if res != "350":
         return 0
 
     # send server data port for data transfer 
-    dataPort = str((port-1)) + '\n'
-    print("CLIENT: sending server data port {}".format(port-1))
-    sock.send(dataPort.encode())
+    # print("CLIENT: sending server data port {}".format(port-1))
+    sock.send((str(dataPort) + '\n').encode())
 
     res = sock.recv(3).decode()
-    print("CLIENT: server status: {}".format(res))
+    # print("CLIENT: server status: {}".format(res))
     # check for "pending further information" response
     if res != "350":
         return 0
     
-    # return dataPort
-    return dataPort
+    # return success
+    print("here")
+    return 1
 
 
 
@@ -79,9 +84,10 @@ def recv_data(cmdSock, cmd, port):
     sock.setsockopt( SOL_SOCKET, SO_REUSEADDR, 1 )
     sock.bind(('', int(port)))
     sock.listen(1)
+
+    # After turning on socket, send server 220, indicating you are listening
     print("Client listening on {}".format(port))
-    ready = "220" + "\n"
-    cmdSock.send(ready.encode())
+    cmdSock.send("220\n".encode())
 
     dataSock, addr = sock.accept()
     print("CLIENT: {} connected at {}".format(addr, port))
@@ -92,7 +98,7 @@ def recv_data(cmdSock, cmd, port):
         dataLen = cmdSock.recv(32)
         dataLen = int(dataLen.decode())
     
-        print("CLIENT: Expecting data length {}".format(dataLen))
+        # print("CLIENT: Expecting data length {}".format(dataLen))
     
         cmdSock.send("220\n".encode())
         data = dataSock.recv(dataLen)
@@ -100,16 +106,17 @@ def recv_data(cmdSock, cmd, port):
         print(data.decode())
     else:
         # get res from server for -g cmd
-        res = sock.recv(3).decode()
+        res = cmdSock.recv(3).decode()
         
-        # res should be OK, not CONNECT
-        if res != "220":
+        # res should be "pending further action" 350
+        if res != "350":
             return 0
         
         # Now send the server the reqested file
-        reqfile = cmd[1] + '\n'
-        sock.send(reqfile.encode())
-        res = sock.recv(3).decode()
+        reqfile = str(cmd[1]).strip(' ') + '\n'
+        print("client wants:",reqfile)
+        cmdSock.send(reqfile.encode())
+        res = cmdSock.recv(3).decode()
 
         # res should be 250 FILE ACTION OK
         if res == "550":
@@ -122,9 +129,28 @@ def recv_data(cmdSock, cmd, port):
             print("450 requested action not taken, is directory")
             return 0
         elif res == "250":
+            print("250 requested file action ok.")
+            cmdSock.send("220\n".encode())
+            
+            # recieve expected data size
+            dataLen = cmdSock.recv(32)
+            dataLen = int(dataLen.decode())
+            print("CLIENT: Expecting data length {}".format(dataLen))
+            cmdSock.send("220\n".encode())
+
             # proceed with recieving data from server
-            print("250 requested file action okay, completed.")
-            return dataPort
+            data = dataSock.recv(dataLen)
+            dataSock.close()
+            print("transfer complete")
+
+            if not os.path.exists(download_dir):
+                os.mkdir(download_dir)
+                print("Directory " , download_dir ,  " Created ")
+            # else:    
+                # print("Directory " , download_dir ,  " already exists")
+ 
+            with open(download_dir + '/' + reqfile.strip(), 'wb+') as f:
+                f.write(data) 
 
     
 

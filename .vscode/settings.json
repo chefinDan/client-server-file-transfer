@@ -5,5 +5,9 @@
         "**/.settings": true,
         "**/.factorypath": true
     },
-    "python.formatting.provider": "black"
+    "python.formatting.provider": "black",
+    "files.associations": {
+        "cvector.h": "c",
+        "stdlib.h": "c"
+    }
 }

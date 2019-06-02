@@ -10,7 +10,7 @@ server: src/ftserver.c
 	# mv *.gcno coverage
 
 client: src/ftclient.py
-	python3 src/ftclient.py $(PORT)
+	python3 src/ftclient.py $(CPORT) $(DPORT)
 
 clean:
 	-pkill ftserver

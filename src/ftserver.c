@@ -10,44 +10,23 @@ sources: https://linux.die.net/man/,
 
 int main(int argc, char *argv[])
 {
-	int sock, cmdSock, dataSock, dataPort, n;
-   size_t dirlen;
+	int sock, cmdSock, dataSock, dataPort;
    char buffer[MAX_BUF],
-        msg[MAX_BUF],
-        dd_addr_buff[20],
+        dd_addr_buff[ADDR_LEN],
         status[MAX_BUF],
         cmd[CMD_LEN];
-   char* dir_buffer = 0;
-   const char *buf = 0;
    socklen_t clientLen;
-   pid_t childpid;
-	// struct sigaction sigact;
    struct sockaddr_in csa_cmd;
-   DIR* dir;
-   struct dirent* dir_entry;
 
    if (argc < 2) { fprintf(stderr," ***ERROR usage: %s PORT=<port>", "make server"); exit(1); } // Check usage & args
 
    start_server(&sock, atoi(argv[1]));
-	// sigemptyset(&sigact.sa_mask);
-	// sigact.sa_flags = SA_RESTART;
-	// sigact.sa_handler = grimReaper;
-	// if (sigaction(SIGCHLD, &sigact, NULL) == -1) {
-	// 	error("SERVER: Error from sigaction()");
-	// 	exit(EXIT_FAILURE);
-	// }
-
-   
-   childcnt = 0;
 
    // Enter server main loop
    while(1){
 
-      if(childcnt > MAX_CNCT){ 
-         error("Maximum number of conccurent connections reached\n"); break; 
-      }
-
-      clientLen = sizeof(csa_cmd); // Get the size of the address for the client that will connect
+      // Get the size of the address for the client that will connect
+      clientLen = sizeof(csa_cmd); 
 
       // Accept a connection, blocking if one is not available until one connects
       if((cmdSock = accept(sock, (SA*)&csa_cmd, &clientLen)) > -1){
@@ -58,8 +37,7 @@ int main(int argc, char *argv[])
          printlnStr("SERVER: accepted connection from %s ", dd_addr_buff);
          
          // send success status greeting to client
-         sprintf(status, "220");
-         send(cmdSock, status, strlen(status), 0);
+         ctrl_send("220", cmdSock);
 
          while (1)
          {
@@ -67,46 +45,43 @@ int main(int argc, char *argv[])
             memset(status, '\0', MAX_BUF);
 
             // recv command from client on cmd port
-            // recieve(cmdSock, buffer);
-            recieve(cmdSock, &buf);
-            printlnStr("Recieved from client: %s", buf);
+            ctrl_recieve(cmdSock, buffer);
+            printlnStr("Recieved from client: %s", buffer);
 
-            // printf("%s", buf);
             // Only accept legal commands
-            if (strcmp(buf, "-l") == 0 || strcmp(buf, "-g") == 0)
+            if (strcmp(buffer, "-l") == 0 || strcmp(buffer, "-g") == 0)
             {
                // save command
-               strcpy(cmd, buf);
+               strcpy(cmd, buffer);
 
                // send client the "pending further information" status
-               sprintf(status, "350");
-               send(cmdSock, status, strlen(status), 0);
-
+               ctrl_send("350", cmdSock);
                // recieve data port from client   
-               recieve(cmdSock, &buf);
-               dataPort = atoi(buf);
-               send(cmdSock, status, strlen(status), 0);
+               ctrl_recieve(cmdSock, buffer);
+               dataPort = atoi(buffer);
 
+               // after recieving data port, inform client more info is needed
+               ctrl_send("350", cmdSock);
                //recieve OK ready for connection status from client
-               recieve(cmdSock, &buf);
+               ctrl_recieve(cmdSock, buffer);
+               
+               // data_connect: establishes data connection on dataPort
                data_connect(&dataSock, dataPort);
 
-               // handle cmd
-               handle_cmd(&cmd, &buf, &cmdSock, &dataSock);
+               // handle_cmd: execs command, sends data, and closes dataSocket
+               handle_cmd(cmd, &cmdSock, &dataSock);
             }
             else
             {
-               printlnStr("Recieved from client: %s", buf);
-               // send client error status
-               sprintf(status, "502");
-               send(cmdSock, status, strlen(status), 0);
+               ctrl_send("502", cmdSock);
+               close(cmdSock);
+               memset(buffer, '\0', MAX_BUF);
+               puts("Connection closed by client");
+               break;
+               // printlnStr("Recieved from client: %s", buffer);
             }
          }
       }
-
-
-
-      
    }
 
    puts("closing listen socket\n");
@@ -115,3 +90,16 @@ int main(int argc, char *argv[])
 }
 
 void error(const char *msg) { perror(msg); exit(1); } // Error function used for reporting issues
+
+
+// scratch code
+
+// struct sigaction sigact;
+
+// sigemptyset(&sigact.sa_mask);
+// sigact.sa_flags = SA_RESTART;
+// sigact.sa_handler = grimReaper;
+// if (sigaction(SIGCHLD, &sigact, NULL) == -1) {
+// 	error("SERVER: Error from sigaction()");
+// 	exit(EXIT_FAILURE);
+// }
