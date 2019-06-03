@@ -1,5 +1,6 @@
 /******************************************************************************
-**                 VS-FTP (Very Simple File Transfer Protocol) 
+**                 VS-FTP (Very Simple File Transfer Protocol)
+**                            Server Software
 ** Author: Daniel Green, greendan@oregonstate.edu
 ** Last Modified: 2 June 2019
 ** Description: starts a ftp server that accepts list and get commands.
@@ -91,12 +92,13 @@ int main(int argc, char *argv[])
             }
             else
             {
+               // This should never be encountered, but in case the client allows an invalid command,
+               // send the client status code 502 and close the connection.
                ctrl_send("502", cmdSock);
                close(cmdSock);
                memset(buffer, '\0', MAX_BUF);
-               puts("Connection closed by client");
+               puts("Connection closed by server");
                break;
-               // printlnStr("Recieved from client: %s", buffer);
             }
          }
       }

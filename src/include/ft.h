@@ -1,5 +1,5 @@
 // Author: Daniel Green, greendan@oregonstate.edu
-// Date: 2 June 2019
+// Last Modified: 2 June 2019
 // Description: definitions of functions used by ftserver.c
 
 #ifndef _FT_H
@@ -42,16 +42,8 @@ int decode(char *, char *, char **);
 void error(const char *msg);
 
 
-static void             /* SIGCHLD handler to reap dead child processes */
-grimReaper(int sig) {
-	// int savedErrno;             /* Save 'errno' in case changed here */
-	// savedErrno = errno;
- 	while (waitpid(-1, NULL, WNOHANG) > 0)
- 		continue;
-  childcnt--;
-	// errno = savedErrno;
-}
 
+// utility function for easily printing a custom string with char data
 void 
 printlnStr(char* str, char* data){
 	size_t str_len, data_len;
@@ -67,6 +59,8 @@ printlnStr(char* str, char* data){
 	free(msg);
 }
 
+
+// utility function for easily printing a custom string with int data
 void 
 printlnInt(char *str, int data){
 	size_t len;
@@ -81,8 +75,20 @@ printlnInt(char *str, int data){
 	free(msg);
 }
 
-void 
-ctrl_send(const char* status, int sock){
+
+// =================================================================== //
+// ===							ctrl_send()						   === //
+// === Pre: 													   === //
+// ===    Param0: a cstring containing a 3 digit ftp status        === //
+// ===    code, such as "220". 									   === //
+// ===    Param1: An active open tcp socket that the status code   === // 
+// ===    will be sent to.										   === //
+// === Post:													   === //
+// ===    None													   === //
+// === Description: This function is used to send ftp codes over   === //
+// === the control socket.										   === // 
+// =================================================================== //
+void ctrl_send(const char* status, int sock){
 	char buf[16];
 	memset(buf, '\0', 16);
 
@@ -91,8 +97,19 @@ ctrl_send(const char* status, int sock){
 }
 
 
-void 
-ctrl_recieve(int socket, char* buffer){	
+// =================================================================== //
+// ===						 ctrl_recieve()					       === //
+// === Pre: 													   === //
+// ===    Param0: An active open tcp socket that the status code   === //
+// ===    will be recieved from.								   === //
+// ===    Param1: An address to a stack allocated char buffer      === //
+// ===    that will store the recived command/code.				   === //
+// === Post:													   === //
+// ===    buffer now contains a short status code or command.	   === //
+// === Description: This function is used to recieve ftp codes     === //
+// === and short commands over the control socket.				   === //
+// =================================================================== //
+void ctrl_recieve(int socket, char* buffer){	
 	int i, n;
 
 	for (i = 0;; ++i)
@@ -111,31 +128,62 @@ ctrl_recieve(int socket, char* buffer){
 	}
 }
 
+
+// =================================================================== //
+// ===						data_connect()						   
+// === Pre: 
+// ===   0. Param0: The address of an unitialized socket that will  
+// ===    be used for data transmission.
+// ===   1. Param1: The address of an unitialized sockaddr_in struct
+// ===    that will be used to establish the data socket connection
+// ===    to the client.
+// ===   2. Param2: The port number that the server will attempt to        
+// ===    connect on for the data connection.
+// === Post:
+// ===   0. The int address passed in at param0 will point to a connected
+// ===    socket that can be used to transfer data.
+// ===   1. The function returns 1 if connection was successful,
+// ===    otherwise it returns 0.
+// ================================================================== //
 int data_connect(int *sock, struct sockaddr_in* csa_cmd, int port)
 {
+	// declare new sockaddr_in for data connection
 	struct sockaddr_in csa;
 
+	// initialize sock to be a tcp socket
 	*sock = socket(AF_INET, SOCK_STREAM, 0);
 
-	memset((char *)&csa, '\0', sizeof(csa)); // initialize address struct
-	csa.sin_family = AF_INET;						   // Create a network-capable socket
-	csa.sin_port = htons(port);			   // Store the port number
-	csa.sin_addr.s_addr = csa_cmd->sin_addr.s_addr;				   // Any address is allowed for connection to this process
+	// setup sockaddr_in, assigning it's addr member to be the address of
+	// the currently connected client. 
+	memset((char *)&csa, '\0', sizeof(csa)); 
+	csa.sin_family = AF_INET;	
+	csa.sin_port = htons(port);			   
+	csa.sin_addr.s_addr = csa_cmd->sin_addr.s_addr;
 
+	// Attempt connection to listening client, if unsuccesful, return 0, otherwise return 1. 
 	if (connect(*sock, (SA *)&csa, sizeof(csa)) < 0)
 	{
 		puts("SERVER: cannot connect to client for data connection");
 		return 0;
 	}
-	else
-	{
-		puts("Connected to client for data transfer");
-		return 1;
-	}
+	
+	puts("Connected to client for data transfer");
+	return 1;
 
 }
 
 
+// =================================================================== //
+// ===						start_server()
+// === Pre:
+// ===   0. Param0: The address of an unitialized socket that will
+// ===    be used to accept connections.
+// ===   1. Param1: The port that the server will listen on.
+// === Post:
+// ===   0. The int address passed in at param0 will point to a connected
+// ===    socket that can be used to accept connections.
+// ===   1. The program will enter listening phase on port passed at param1.
+// ================================================================== //
 int start_server(int* sock, int port){
 	struct sockaddr_in ssa;
 
@@ -169,89 +217,120 @@ int start_server(int* sock, int port){
 }
 
 
+// =================================================================== //
+// ===						readDirectory()
+// === Pre:
+// ===   0. Param0: A string literal of the directory path that will be read.
+// ===   1. Param1: The address of a size_t that will store the length of 
+// ===    the directory contents.
+// === Post:
+// ===   0. The size_t address passed in at param1 will point to a size_t
+// ===    that represets the total length of the directory listing.
+// ===    socket that can be used to accept connections.
+// ===   1. Upon success, an address to a char array will be returned.
+// ===    this array will contain a formatted string of the names of
+// ===	  all entries in the directory pointed to by path.
+// ===   2. Upon failure, null is returned.   
+// ================================================================== //
 char* readDirectory(const char* path, size_t* length)
 {
-	// int stat(const char *path, struct stat *buf);
 	char* buf = 0;
 	struct stat stat_buf;
 	int i, j;
-
 	DIR* dirFd;
 	struct dirent* dirInfo;
 
+	// Attempt to open the directory path
 	if ((dirFd = opendir(path)) == NULL)
 	{
 		error("SERVER: error readDirectory()");
+		return 0;
 	}
-	else
+
+	// read contents of dirFd into struct dirent* dirInfo
+	for (i = 0, j = 0; (dirInfo = readdir(dirFd)); i = j)
 	{
-		// read contents into buffer
-		for (i = 0, j = 0; (dirInfo = readdir(dirFd)); i = j)
+		// attempt to stat the current dir entry, and store in stat_buf
+		if(stat(dirInfo->d_name, &stat_buf) == -1)
 		{
-			if(stat(dirInfo->d_name, &stat_buf) == -1)
-			{
-				error("SERVER: error reading dirInfo");
-			}
-
-			// sum the total length of direntry name strings
-			j += strlen(dirInfo->d_name);
-
-			// expand buffer to hold new direntry, +2 for newline and directory slash char
-			if (S_ISDIR(stat_buf.st_mode) && (buf = realloc(buf, (j + 2) * sizeof(char))) == NULL)
-			{
-				closedir(dirFd);
-				fprintf(stderr, "readDir(): buffer realloc failed.\n");
-				return 0;
-			}
-
-			// expand buffer to hold new direntry, +1 for newline
-			if(S_ISREG(stat_buf.st_mode) && (buf = realloc(buf, (j + 1) * sizeof(char))) == NULL)
-			{
-				closedir(dirFd);
-				fprintf(stderr, "readDir(): buffer realloc failed.\n");
-				return 0;
-			}
-
-			if (S_ISDIR(stat_buf.st_mode)){
-				strcpy(&buf[i], dirInfo->d_name);
-				buf[j++] = '/'; // set directory slash identifier
-				buf[j++] = '\n'; // set newline
-			}
-			else{
-				strcpy(&buf[i], dirInfo->d_name);
-				buf[j++] = '\n'; // set newline
-			}
+			error("SERVER: error reading dirInfo");
 		}
 
-		closedir(dirFd);
+		// sum the total length of direntry name strings
+		j += strlen(dirInfo->d_name);
 
-		buf[j - 1] = '\0'; // replace last newline with null character
-		*length = j;	// store length
+		// expand buffer to hold new direntry, +2 for newline and directory slash symbol
+		if (S_ISDIR(stat_buf.st_mode) && (buf = realloc(buf, (j + 2) * sizeof(char))) == NULL)
+		{
+			closedir(dirFd);
+			fprintf(stderr, "readDir(): buffer realloc failed.\n");
+			return 0;
+		}
+
+		// expand buffer to hold new direntry, +1 for newline
+		if(S_ISREG(stat_buf.st_mode) && (buf = realloc(buf, (j + 1) * sizeof(char))) == NULL)
+		{
+			closedir(dirFd);
+			fprintf(stderr, "readDir(): buffer realloc failed.\n");
+			return 0;
+		}
+
+		// if the current direntry is a directory, append a slash to the end of
+		// it's name in the buffer, followed by a newline. 
+		if (S_ISDIR(stat_buf.st_mode)){
+			strcpy(&buf[i], dirInfo->d_name);
+			buf[j++] = '/'; // set directory slash identifier
+			buf[j++] = '\n'; // set newline
+		}
+		else{
+			strcpy(&buf[i], dirInfo->d_name);
+			buf[j++] = '\n'; // set newline
+		}
+
 	}
+
+	// close the directory
+	closedir(dirFd);
+
+	buf[j - 1] = '\0'; // replace last newline with null character
+	*length = j;	// store length
 
 	return buf;
 }
 
-
+// =================================================================== //
+// ===							getFile()
+// === Pre:
+// ===   0. Param0: The address of a pointer to an unitialized char array.
+// ===   1. Param1: A string literal of the directory path that will be read.
+// ===   2. Param2: The address of a size_t that will hold the length of the file.
+// ===   3. Param3: A initialized char array containing the name of the file
+// ===    that will be read. 
+// === Post:
+// ===   0. *buf will contain the entire file contents of "file_name" 
+// ===   1. *length will contain the total length of the file.
+// ===   
 // returns: 1 if found, O if not found, -1 if file error, -2 if file is directory
+// ================================================================== //
 int getFile(char** buf, const char *path, size_t *length, char* file_name)
 {
-	// int stat(const char *path, struct stat *buf);
-	// unsigned char* buf = 0;
 	struct stat stat_buf;
 	int found;
 	FILE *fp;
 	DIR *dirFd;
 	struct dirent *dirInfo;
 
+	// attempt to open the directory at "path"
 	if ((dirFd = opendir(path)) == NULL)
 	{
 		error("SERVER: error readDir()");
 	}
 	else
 	{
+		// set a flag value to determine whether the file is found
 		found = 0;
-		// read contents into buffer
+
+		// read contents into dirInfo
 		while ((dirInfo = readdir(dirFd)))
 		{
 			// get file stats, if cannot stat file return -1
@@ -270,7 +349,10 @@ int getFile(char** buf, const char *path, size_t *length, char* file_name)
 				}
 				else
 				{
+					// The file is found
 					found = 1;
+
+					// open the file in read/binary mode
 					fp = fopen(file_name, "rb");
 
 					//Get file length
@@ -278,13 +360,13 @@ int getFile(char** buf, const char *path, size_t *length, char* file_name)
 					*length = ftell(fp);
 					fseek(fp, 0, SEEK_SET);
 
-					//Allocate memory
+					//Allocate memory to *buf
 					if (!(*buf = (char *)malloc(*length + 1)))
 					{
 						return -1;
 					}
 
-					//Read file contents into buf
+					//Read file contents into *buf
 					fread(*buf, 1, *length, fp);
 					fclose(fp);
 				}
@@ -304,25 +386,21 @@ int getFile(char** buf, const char *path, size_t *length, char* file_name)
 
 }
 
-// void readData(FILE* fp, char* dest, int len)
-// {
-// 	size_t n = 100;
 
-// 	if (fp)
-// 	{
-// 		while (n)
-// 		{
-// 			size_t n_read = fread(head, sizeof(double), n, file);
-// 			head += n_read;
-// 			n -= n_read;
-// 			if (feof(file) || ferror(file))
-// 				break;
-// 		}
-// 		processData(array, head - array);
-// 		fclose(file);
-// 	}
-// }
-
+// =================================================================== //
+// ===							handleCmd()
+// === Pre:
+// ===   0. Param0: The cmd that was recieved from the client
+// ===   1. Param1: The address of the control socket  
+// ===   2. Param2: The address of the data socket.
+// === Post:
+// ===   0. If a legal command was recived then the cmd will be executed.
+// ===   1. If -l was recieved, the directory is read, and the contents
+// ===    are sent over the data socket. 
+// ===   2. If -g was recieved, the file is searched for, and if found is
+// ===    sent over the data socket.
+// ===   3. After either outcome, the data socket is closed.
+// ================================================================== //
 int handle_cmd(char* cmd, int* cmdSock, int* dataSock){
 	char* file_buffer = 0;
 	char buffer[MAX_BUF]; 
@@ -427,6 +505,14 @@ int handle_cmd(char* cmd, int* cmdSock, int* dataSock){
 	return 1;
 }
 
-
+// static void /* SIGCHLD handler to reap dead child processes */
+// grimReaper(int sig) {
+// 	// int savedErrno;             /* Save 'errno' in case changed here */
+// 	// savedErrno = errno;
+//  	while (waitpid(-1, NULL, WNOHANG) > 0)
+//  		continue;
+//   childcnt--;
+// 	// errno = savedErrno;
+// }
 
 #endif

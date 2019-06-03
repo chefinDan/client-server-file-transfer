@@ -1,3 +1,31 @@
+# /******************************************************************************
+# **          VS-FTP (Very Simple File Transfer Protocol)
+#                           Client software
+# ** Author: Daniel Green, greendan@oregonstate.edu
+# ** Last Modified: 2 June 2019
+# ** Description: starts a ftp client that accepts list and get commands.
+# *** Usage requires the ftserver program to be running on either localhost
+# *** or a remote location. The client program will can ask for any file
+# *** found in the local directory of the server prgram.
+# *** The client program will exit after each executed command.
+# *** The server will remain listening for connections until SIGINT is recieved.
+# *** 
+
+
+# ** DEMO: To demonstrate the program, first start ftserver, then start ftclient.
+# ** Transfer big.txt, a 6.2 MB file, and compare downloaded byte size to client
+# ** reported byte count. Then transfer cvector, a binary file, give it execute
+# ** permissions and execute. It is simple program that allocates a large array
+# ** on the heap and displays the size of the array. 
+# ******************************************************************************/
+
+# /*
+# sources: https://linux.die.net/man/,
+#          https://docs.python.org/3.7/library/socket.html
+#          https://beej.us/guide/bgnet/
+# */
+
+
 import sys
 import os
 from socket import socket, AF_INET, SOCK_STREAM, SOL_SOCKET, SO_REUSEADDR
@@ -6,12 +34,15 @@ from socket import socket, AF_INET, SOCK_STREAM, SOL_SOCKET, SO_REUSEADDR
 download_dir = 'downloads'
 BUFF_SIZE = 4096 # 4 KiB
 
+# Main entry point for client program
 def main():
+    # validate arguments
     if len(sys.argv) != 4:
         print("*** ERROR usage: make client HOST=<host_name> CPORT=<ctrl_port> DPORT=<data_port>")
         print("*** Host maybe be flip1-4, or localhost")
         return 1
 
+    # assign correct hostname, port, and dataPort based on cli args
     host = sys.argv[1]
     if host == 'flip1' or host == 'flip2' or host == 'flip3' or host == 'flip4':
         host = host + '.engr.oregonstate.edu'
@@ -20,15 +51,19 @@ def main():
     dataPort = int(sys.argv[3])
     sock = socket(AF_INET, SOCK_STREAM)
 
+    # attempt connection to the listening server
     if not connect(sock, host, port):
         return 1
 
+    # enter the main session loop
     session_loop(sock, port, dataPort)
 
     print("Closing connection")
     sock.close()
 
-    
+
+# This function maintains a loop that will execute until a valid command
+# is successfully entered and executed.
 def session_loop(sock, port, dataPort):
     loop = 1
 
@@ -36,7 +71,6 @@ def session_loop(sock, port, dataPort):
             cmd = input("ftp> ")
             cmdlist = cmd.split()
             if cmdlist[0] == "-l" or (cmdlist[0] == "-g" and len(cmdlist) == 2):
-                # print("cmd: {}".format(cmdlist))
                 handle_cmd(sock, cmdlist, port, dataPort)
                 loop = 0
             elif cmdlist[0] == "-g" and len(cmdlist) == 1:
@@ -47,13 +81,13 @@ def session_loop(sock, port, dataPort):
                 print("ftp> {} command not implemented".format(cmd))
 
 
-
+# This function sends a command to the server and if the send was successful,
+# calls the recv_data function. 
 def handle_cmd(sock, cmd, port, dataPort):
     if send_cmd(sock, cmd, port, dataPort):
         recv_data(sock, cmd, dataPort)
         
         
-
 
 def send_cmd(sock, cmd, port, dataPort):
     
